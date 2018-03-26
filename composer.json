@@ -19,5 +19,8 @@
     {
       "packagist.org": false
     }
+  ],
+  "bin": [
+    "tilda-downloader"
   ]
 }
