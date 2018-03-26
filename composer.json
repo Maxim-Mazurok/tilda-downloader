@@ -1,14 +1,23 @@
 {
-    "name": "maxim_mazurok/tilda-downloader",
-    "description": "Save page from tilda and rewrite URLs to local files",
-    "type": "project",
-    "license": "MIT",
-    "authors": [
-        {
-            "name": "Maxim Mazurok",
-            "email": "maxim@mazurok.com"
-        }
-    ],
-    "minimum-stability": "stable",
-    "require": {}
+  "name": "maxim_mazurok/tilda-downloader",
+  "description": "Save page from tilda and rewrite URLs to local files",
+  "type": "project",
+  "license": "MIT",
+  "authors": [
+    {
+      "name": "Maxim Mazurok",
+      "email": "maxim@mazurok.com"
+    }
+  ],
+  "minimum-stability": "stable",
+  "require": {},
+  "repositories": [
+    {
+      "type": "composer",
+      "url": "https://repo.packagist.com/maxim-mazurok/"
+    },
+    {
+      "packagist.org": false
+    }
+  ]
 }
