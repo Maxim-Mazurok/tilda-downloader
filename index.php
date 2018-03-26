@@ -1,3 +1,4 @@
+#!/usr/bin/env php
 <?php
 /**
  * Created by Maxim Mazurok <maxim@mazurok.com>
@@ -5,8 +6,14 @@
  * Time: 8:01 PM
  */
 
-$tilda_url = 'http://project550091.tilda.ws';
-$new_site_url = 'https://popcorn-terminator.herokuapp.com';
+if (count($argv) < 2) {
+    exit('Example usage: tilda-downloader "http://project123.tilda.ws" "https://example.com"');
+}
+
+$tilda_url = $argv[1];
+
+$new_site_url = '';
+if (!empty($argv[2])) $new_site_url = $argv[2];
 
 create_output_dir();
 
@@ -182,7 +189,7 @@ function extract_images($HTML)
 
 function dr($name)
 {
-    $saved = __DIR__ . DIRECTORY_SEPARATOR . 'saved';
+    $saved = getcwd() . DIRECTORY_SEPARATOR . 'saved';
 
     switch ($name) {
         case 'saved':
