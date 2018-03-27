@@ -91,7 +91,7 @@ function get_res_local_path($url, $relative = false)
     $basename = get_resource_basename($url);
     $dir = pathinfo(parse_url($url)['path'])['dirname'];
     if ($relative) {
-        return $dir . DIRECTORY_SEPARATOR . $basename;
+        return $dir . '/' . $basename;
     } else {
         return dr('saved') . DIRECTORY_SEPARATOR . $dir . DIRECTORY_SEPARATOR . $basename;
     }
