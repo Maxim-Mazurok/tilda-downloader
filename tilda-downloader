@@ -7,17 +7,20 @@
  */
 
 if (count($argv) < 2) {
-    exit('Example usage: tilda-downloader "http://project123.tilda.ws" "https://example.com"');
+    exit("Example usage:
+    tilda-downloader \"http://project123.tilda.ws\" \"https://example.com\"
+    php72 tilda-downloader \"https://stripe.com/us/billing\" \"https://stripe-copy.herokuapp.com\"" . PHP_EOL);
 }
 
 $tilda_url = $argv[1];
+$GLOBALS['tilda_base_url'] = parse_url($tilda_url, PHP_URL_SCHEME) . '://' . parse_url($tilda_url, PHP_URL_HOST);
 
 $new_site_url = '';
 if (!empty($argv[2])) $new_site_url = $argv[2];
 
 create_output_dir();
 
-$HTML = file_get_contents($tilda_url);
+$HTML = file_get_contents($tilda_url, false, stream_context_create(['http' => ['user_agent' => 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/68.0.3440.106 Safari/537.36']]));
 
 /* scripts */
 $scripts = extract_scripts($HTML);
@@ -25,6 +28,13 @@ foreach ($scripts as $url) {
     save_resource($url);
 }
 $HTML = replace_resources($HTML, $scripts);
+
+/* struct */
+$struct = extract_struct_files($HTML);
+foreach ($struct as $url) {
+    save_resource($url);
+}
+$HTML = replace_resources($HTML, $struct);
 
 /* css */
 $links = extract_css($HTML);
@@ -47,6 +57,13 @@ foreach ($css_images as $url) {
 }
 $HTML = replace_resources($HTML, $css_images);
 
+/* preload fonts */
+$preload_fonts = extract_preload_fonts($HTML);
+foreach ($preload_fonts as $url) {
+    save_resource($url);
+}
+$HTML = replace_resources($HTML, $preload_fonts);
+
 /* og:image */
 // <meta property="og:image" content="https://static.tildacdn.com/tild3366-3534-4633-b831-623764306565/popcorn.jpg"/>
 
@@ -57,8 +74,7 @@ $HTML = remove_all_other($HTML, $tilda_url, $new_site_url);
 file_put_contents(dr('saved') . DIRECTORY_SEPARATOR . 'index.html', $HTML);
 
 
-function remove_all_other($HTML, $tilda_url, $new_site_url)
-{
+function remove_all_other($HTML, $tilda_url, $new_site_url) {
     /* remove dns-prefetch */
     $HTML = preg_replace('/<link.*?rel="dns-prefetch".*?href="(.*?)".*?>/', '', $HTML);
 
@@ -66,10 +82,10 @@ function remove_all_other($HTML, $tilda_url, $new_site_url)
     $HTML = preg_replace('/<link.*?rel="canonical".*?href="(.*?)".*?>/', '', $HTML);
 
     /* remove favicon */
-    $HTML = preg_replace('/<link.*?rel=".*?icon.*?".*?href="(.*?)".*?>/', '', $HTML);
+    /*$HTML = preg_replace('/<link.*?rel=".*?icon.*?".*?href="(.*?)".*?>/', '', $HTML);*/
 
     /* remove stats */
-    $HTML = substr($HTML, 0, strpos($HTML, '<!-- Tilda copyright. Don\'t remove this line -->')) . '</body></html>';
+    //$HTML = substr($HTML, 0, strpos($HTML, '<!-- Tilda copyright. Don\'t remove this line -->')) . '</body></html>';
 
     /* replace url */
     $HTML = str_replace($tilda_url, $new_site_url, $HTML);
@@ -77,17 +93,16 @@ function remove_all_other($HTML, $tilda_url, $new_site_url)
     return $HTML;
 }
 
-function replace_resources($HTML, $resources)
-{
+function replace_resources($HTML, $resources) {
     foreach ($resources as $url) {
+        if ($url[0] === '#') continue;
         $path = get_res_local_path($url, true);
         $HTML = str_replace($url, $path, $HTML);
     }
     return $HTML;
 }
 
-function get_res_local_path($url, $relative = false)
-{
+function get_res_local_path($url, $relative = false) {
     $basename = get_resource_basename($url);
     $dir = pathinfo(parse_url($url)['path'])['dirname'];
     if ($relative) {
@@ -97,30 +112,39 @@ function get_res_local_path($url, $relative = false)
     }
 }
 
-function save_resource($url)
-{
+function save_resource($url) {
+    if ($url['0'] === '#') return;
+
     echo '.';
 
     $url = preg_replace('/^\/\//', 'https://', $url);
-    $content = file_get_contents($url);
+    if ($url[0] === '/') $url = $GLOBALS['tilda_base_url'] . $url;
+    $content = file_get_contents($url, false, stream_context_create(['http' => ['user_agent' => 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/68.0.3440.106 Safari/537.36']]));
 
-    if (pathinfo(parse_url($url)['path'], PATHINFO_EXTENSION) === 'css') {
-        $css_images = extract_css_backgrounds($content);
-        foreach ($css_images as $img_url) {
-            save_resource($img_url);
+    if ($content !== false) {
+        if (pathinfo(parse_url($url)['path'], PATHINFO_EXTENSION) === 'css') {
+            $css_images = extract_css_backgrounds($content);
+            foreach ($css_images as $img_url) {
+                save_resource($img_url);
+            }
+            $content = replace_resources($content, $css_images);
+        } elseif (pathinfo(parse_url($url)['path'], PATHINFO_EXTENSION) === 'js') {
+            $js_images = extract_images_from_js($content);
+            foreach ($js_images as $img_url) {
+                save_resource($img_url);
+            }
+            $content = replace_resources($content, $js_images);
         }
-        $content = replace_resources($content, $css_images);
-    }
 
-    if (!file_exists(pathinfo(get_res_local_path($url))['dirname'])) {
-        mkdir(pathinfo(get_res_local_path($url))['dirname'], 0777, true);
-    }
+        if (!file_exists(pathinfo(get_res_local_path($url))['dirname'])) {
+            mkdir(pathinfo(get_res_local_path($url))['dirname'], 0777, true);
+        }
 
-    file_put_contents(get_res_local_path($url), $content);
+        file_put_contents(get_res_local_path($url), $content);
+    }
 }
 
-function get_resource_basename($url)
-{
+function get_resource_basename($url) {
     $parsed_url = parse_url($url);
     $parsed_url_path = $parsed_url['path'];
     $url_path_info = pathinfo($parsed_url_path);
@@ -128,8 +152,7 @@ function get_resource_basename($url)
     return $basename;
 }
 
-function extract_scripts($HTML)
-{
+function extract_scripts($HTML) {
     $re = '/<script.*?src="(.*?)"/';
     preg_match_all($re, $HTML, $matches, PREG_SET_ORDER, 0);
     return array_map(function ($x) {
@@ -137,13 +160,64 @@ function extract_scripts($HTML)
     }, $matches);
 }
 
-function extract_css_backgrounds($CODE)
-{
-    $re = '/url\(\\\'(\\\' | \")?(.*?)\1?\)/';
+function extract_struct_files($HTML) {
+    $re = '/<script type="application\/json" id="strut_files">(.*?)<\/script>/';
+    preg_match_all($re, $HTML, $matches, PREG_SET_ORDER, 0);
+    $files = array_map(function ($x) {
+        return $x[1];
+    }, $matches);
+    $to_download = [];
+    foreach ($files as $file) {
+        $paths = extract_struct_files_from_json(html_entity_decode($file));
+        foreach ($paths as $path) array_push($to_download, $path);
+    }
+    return $to_download;
+}
+
+function extract_struct_files_from_json($JSON) {
+    $arr = json_decode($JSON, true);
+    $ret = [];
+    foreach ($arr as $key => $value) {
+        array_push($ret, $value);
+    }
+    return $ret;
+}
+
+function extract_preload_fonts($HTML) {
+    $re = '/<link.*?href="(.*?\.woff2)"/';
+    preg_match_all($re, $HTML, $matches, PREG_SET_ORDER, 0);
+    return array_map(function ($x) {
+        return $x[1];
+    }, $matches);
+}
+
+function extract_css_backgrounds($CODE) {
+    $re = '/url\((\\\'|\")?(.*?)\1?\)/';
     preg_match_all($re, $CODE, $matches, PREG_SET_ORDER, 0);
 
     $matches = array_map(function ($x) {
-        $link = $x[2];
+        $link = html_entity_decode($x[2]);
+        $link = preg_replace('/(\'|")$/', '', $link);
+        return $link;
+    }, $matches);
+
+    $matches = array_filter($matches, function ($x) {
+        return !empty($x[2]);
+    });
+
+    $matches = array_filter($matches, function ($x) {
+        return strpos($x, ';base64,') === false;
+    });
+
+    return $matches;
+}
+
+function extract_images_from_js($JS) {
+    $re = '/([a-z\-_0-9\/\:\.]+\.(?:png|jpg|jpeg|gif|svg))/i';
+    preg_match_all($re, $JS, $matches, PREG_SET_ORDER, 0);
+
+    $matches = array_map(function ($x) {
+        $link = html_entity_decode($x[1]);
         $link = preg_replace('/(\'|")$/', '', $link);
         return $link;
     }, $matches);
@@ -155,8 +229,7 @@ function extract_css_backgrounds($CODE)
     return $matches;
 }
 
-function extract_css($HTML)
-{
+function extract_css($HTML) {
     $re = '/<link.*?href="(.*?)"/';
     preg_match_all($re, $HTML, $matches, PREG_SET_ORDER, 0);
 
@@ -171,13 +244,12 @@ function extract_css($HTML)
     return $matches;
 }
 
-function extract_images($HTML)
-{
+function extract_images($HTML) {
     $re = '/="(.*?)"/';
     preg_match_all($re, $HTML, $matches, PREG_SET_ORDER, 0);
 
     $matches = array_filter($matches, function ($x) {
-        return preg_match('/\.(png|jpg|jpeg|gif|png|svg)$/', $x[1]) === 1;
+        return preg_match('/\.(png|jpg|jpeg|gif|svg)$/', $x[1]) === 1;
     });
 
     $matches = array_map(function ($x) {
@@ -187,8 +259,7 @@ function extract_images($HTML)
     return $matches;
 }
 
-function dr($name)
-{
+function dr($name) {
     $saved = getcwd() . DIRECTORY_SEPARATOR . 'saved';
 
     switch ($name) {
@@ -201,7 +272,6 @@ function dr($name)
     }
 }
 
-function create_output_dir()
-{
+function create_output_dir() {
     if (!file_exists(dr('saved'))) mkdir(dr('saved'));
 }
